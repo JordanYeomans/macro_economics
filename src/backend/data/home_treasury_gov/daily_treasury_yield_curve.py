@@ -18,23 +18,26 @@ class DailyTreasuryYieldCurve(DataAPIBase):
         return data[data[search_column] == search_str].reset_index(drop=True)
 
     def get_yield_curve_for_date(self, date):
+        # We create a range of days incase the day selected is not a trading day
+        start_date = self.create_date(year=date.year, month=date.month, day=date.day)
+        end_date = min([start_date + datetime.timedelta(days=30),
+                        datetime.datetime.today()])
 
-        df = self.get_all_data_between_dates(start_date=dtyc.create_date(year=date.year,
-                                                                         month=date.month,
-                                                                         day=date.day),
-                                             end_date=dtyc.create_date(year=date.year,
-                                                                       month=date.month,
-                                                                       day=date.day))
+        df = self.get_all_data_between_dates(start_date=start_date, end_date=end_date)
 
-        # Isolate day and transpose dataframe
-        df = df.loc[df['Date'] == datetime.datetime(year=date.year, month=date.month, day=date.day)]
+        # Isolate day, we know that the date closest to the requested date is first one
         df = df.drop(columns=['Date'])
+        if len(df) == 0:
+            return None
+        
+        df = df.iloc[0]
         df = df.transpose()
+        df = pd.DataFrame(df)
         df.columns = ['Yield (%)']
 
         # Add column for maturity in days
         for i, row in df.iterrows():
-            num = int(i.split(' ')[0])
+            num = int(str(i).split(' ')[0])
 
             if 'Mo' in i:
                 days = num * 30
@@ -58,7 +61,9 @@ class DailyTreasuryYieldCurve(DataAPIBase):
             _df = self._request_data_for_year(year)
             _all_df.append(_df)
         _all_df = pd.concat(_all_df, axis=0).reset_index(drop=True)
-        _all_df = _all_df.sort_values(by='Date', ascending=True).reset_index(drop=True)
+        _all_df = _all_df.sort_values(by='Date', ascending=True)
+        _all_df = _all_df.loc[(_all_df['Date'] >= start_date) & (_all_df['Date'] <= end_date)]
+        _all_df = _all_df.reset_index(drop=True)
         return _all_df
 
     def _request_data_for_year(self, year):
@@ -89,8 +94,8 @@ class DailyTreasuryYieldCurve(DataAPIBase):
 if __name__ == '__main__':
     dtyc = DailyTreasuryYieldCurve()
 
-    all_data = dtyc.get_all_data_between_dates(start_date=dtyc.create_date(year=2021, month=1, day=1),
-                                               end_date=dtyc.create_date(year=2022, month=1, day=1))
+    # all_data = dtyc.get_all_data_between_dates(start_date=dtyc.create_date(year=2022, month=1, day=1),
+    #                                            end_date=dtyc.create_date(year=2022, month=1, day=1))
 
     import matplotlib.pyplot as plt
 
