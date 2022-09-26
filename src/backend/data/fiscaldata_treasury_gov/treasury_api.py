@@ -85,7 +85,7 @@ class TreasuryAPI(DataAPIBase):
 
         data = None
         if self._from_cache:
-            data = self._load_data_from_cache(req_str, filetype='json')
+            data = self._load_data_from_cache(req_str)
 
         if data is None:
             print('Requesting Data from Treasury API')
@@ -98,7 +98,7 @@ class TreasuryAPI(DataAPIBase):
             data['api_usage_info']['request_str'] = req_str
             data['api_usage_info']['request_time'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            self._save_to_cache(req_str, data, filetype='json')
+            self._save_to_cache(req_str, data)
 
         return data
 
