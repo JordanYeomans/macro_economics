@@ -1,0 +1,11 @@
+
+
+# US Yield Curve
+https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve&field_tdr_date_value=2022
+
+
+
+# https://fiscaldata.treasury.gov/api-documentation/
+
+# Total Outstanding Debt
+https://fiscaldata.treasury.gov/datasets/historical-debt-outstanding/historical-debt-outstanding
