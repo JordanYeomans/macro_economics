@@ -37,7 +37,7 @@ if __name__ == '__main__':
     start_date = datetime.datetime(year=1990, month=1, day=1)
     end_date = datetime.datetime(year=2022, month=9, day=1)
 
-    data = debt_to_penny.get_all_data_between_dates(start_date=start_date, end_date=end_date, save_to_json=True)
+    data = debt_to_penny.get_all_data_between_dates(start_date=start_date, end_date=end_date)
 
     import matplotlib.pyplot as plt
     plt.plot(data['record_date'], data['debt_held_public_amt'])

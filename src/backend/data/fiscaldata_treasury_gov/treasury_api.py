@@ -58,7 +58,6 @@ class TreasuryAPI(DataAPIBase):
 
         if data['meta']['total-pages'] > 1:
             page_size = data['meta']['total-count']
-            print(f'More than one page of data - We are requesting again with {page_size}')
             data = self._send_request(fields=fields, filters=filters, page_size=page_size)
 
         # Ensure that the total number of pages == 1 - this ensures we have all the data
@@ -89,6 +88,7 @@ class TreasuryAPI(DataAPIBase):
             data = self._load_data_from_cache(req_str, filetype='json')
 
         if data is None:
+            print('Requesting Data from Treasury API')
             data = requests.get(req_str).json()
 
             # Add API Usage data
