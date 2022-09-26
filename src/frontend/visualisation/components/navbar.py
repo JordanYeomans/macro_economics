@@ -9,6 +9,7 @@ def navbar():
             children=[
                 dbc.NavItem(dbc.NavLink("Avg Interest Rates", href="/avg_interest_rates")),
                 dbc.NavItem(dbc.NavLink("Debt To Penny", href="/debt_to_penny")),
+                dbc.NavItem(dbc.NavLink("Yield Curve", href="/yield_curve")),
             ],
             color="dark",
             dark=True,
