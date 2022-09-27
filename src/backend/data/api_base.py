@@ -10,6 +10,11 @@ class DataAPIBase:
     def __init__(self):
         self._from_cache = True
         self._cache_folder = '/data/tmp/cache/'
+        self._date_col_name = 'date'
+
+    @property
+    def date_col_name(self):
+        return self._date_col_name
 
     def get_all_data_between_dates(self, start_date, end_date):
         raise NotImplementedError
