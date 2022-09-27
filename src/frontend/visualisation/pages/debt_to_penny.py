@@ -16,7 +16,7 @@ def plot_debt_to_penny():
     debt_type_list = ['debt_held_public_amt', 'intragov_hold_amt', 'tot_pub_debt_out_amt']
     plot_list = list()
     for debt_type in debt_type_list:
-        plot = go.Scatter(x=df['record_date'],
+        plot = go.Scatter(x=df['date'],
                           y=df[debt_type],
                           line=dict(width=1),
                           name=debt_type)
