@@ -128,8 +128,7 @@ class TreasuryAPI(DataAPIBase):
             _base_str += f'{field},'
         return _base_str[:-1]
 
-    @staticmethod
-    def _format_data(raw_data):
+    def _format_data(self, raw_data):
 
         df = pd.DataFrame(raw_data['data'])
 
@@ -159,6 +158,7 @@ class TreasuryAPI(DataAPIBase):
             else:
                 raise NotImplementedError
 
+        df = df.rename(columns={'record_date': self.date_col_name})
         return df
 
 

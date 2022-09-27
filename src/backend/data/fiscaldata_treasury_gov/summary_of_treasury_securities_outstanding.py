@@ -66,9 +66,9 @@ if __name__ == '__main__':
                                                       end_date=_end_date,
                                                       security_desc=sec)
 
-        axes[0].plot(_data['record_date'], _data['debt_held_public_mil_amt'], label=sec)
-        axes[1].plot(_data['record_date'], _data['intragov_hold_mil_amt'], label=sec)
-        axes[2].plot(_data['record_date'], _data['total_mil_amt'], label=sec)
+        axes[0].plot(_data['date'], _data['debt_held_public_mil_amt'], label=sec)
+        axes[1].plot(_data['date'], _data['intragov_hold_mil_amt'], label=sec)
+        axes[2].plot(_data['date'], _data['total_mil_amt'], label=sec)
 
     axes[0].set_title('Public Debt Held')
     axes[1].set_title('Intragov Hold')

@@ -40,7 +40,7 @@ if __name__ == '__main__':
     data = debt_to_penny.get_all_data_between_dates(start_date=start_date, end_date=end_date)
 
     import matplotlib.pyplot as plt
-    plt.plot(data['record_date'], data['debt_held_public_amt'])
-    plt.plot(data['record_date'], data['intragov_hold_amt'])
-    plt.plot(data['record_date'], data['tot_pub_debt_out_amt'])
+    plt.plot(data['date'], data['debt_held_public_amt'])
+    plt.plot(data['date'], data['intragov_hold_amt'])
+    plt.plot(data['date'], data['tot_pub_debt_out_amt'])
     plt.show()
