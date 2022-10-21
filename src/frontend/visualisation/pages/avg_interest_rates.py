@@ -9,13 +9,13 @@ from src.backend.data.home_treasury_gov.daily_treasury_yield_curve import DailyT
 
 start_date = datetime.datetime(year=2001, month=1, day=1)
 end_date = datetime.datetime.today()
-from src.backend.analysis.projected_interest import ProjectedInterest
+from src.backend.analysis.debt_type_summary import DebtTypeSummary
 
 
 def plot_est_vs_actual():
     plot_list = list()
     for debt_type in ['T-Bills', 'T-Notes', 'T-Bonds']:
-        proj_interest = ProjectedInterest(debt_type=debt_type)
+        proj_interest = DebtTypeSummary(debt_type=debt_type)
         _plot_df = proj_interest.plot_est_vs_actual_interest()
 
         for col in _plot_df.columns.drop('date'):

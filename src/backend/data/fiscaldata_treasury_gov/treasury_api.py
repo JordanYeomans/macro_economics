@@ -144,6 +144,10 @@ class TreasuryAPI(DataAPIBase):
                 # Handle Columns that are expressed in Millions, e.g. [Debt Held by the Public (in Millions)]
                 if '_mil_' in col:
                     multiplier = 1e6
+                    new_col = col.replace('_mil_', '_')
+                    df[new_col] = df[col]
+                    df.drop(columns=[col], inplace=True)
+                    col = new_col
                 df[col] = pd.to_numeric(df[col], errors='coerce') * multiplier
 
             elif data_type == 'PERCENTAGE':
