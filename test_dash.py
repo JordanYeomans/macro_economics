@@ -4,15 +4,6 @@ from dash.dependencies import Input, Output, State
 app = Dash(__name__)
 
 app.layout = html.Div([
-    html.Div([
-        dcc.Input(
-            id='adding-rows-name',
-            placeholder='Enter a column name...',
-            value='',
-            style={'padding': 10}
-        ),
-        html.Button('Add Column', id='adding-rows-button', n_clicks=0)
-    ], style={'height': 50}),
 
     dash_table.DataTable(
         id='adding-rows-table',
@@ -29,7 +20,7 @@ app.layout = html.Div([
             'renamable': False
         }],
         data=[
-            {'column-date': 1,
+            {'column-date': '2022-01-01',
              'column-date_2': 1},
         ],
         editable=True,
@@ -54,24 +45,16 @@ def add_row(n_clicks, rows, columns):
 
 
 @app.callback(
-    Output('adding-rows-table', 'columns'),
-    Input('adding-rows-button', 'n_clicks'),
-    State('adding-rows-name', 'value'),
-    State('adding-rows-table', 'columns'))
-def update_columns(n_clicks, value, existing_columns):
-    if n_clicks > 0:
-        existing_columns.append({
-            'id': value, 'name': value,
-            'renamable': True, 'deletable': True
-        })
-    return existing_columns
-
-
-@app.callback(
     Output('adding-rows-graph', 'figure'),
     Input('adding-rows-table', 'data'),
     Input('adding-rows-table', 'columns'))
 def display_output(rows, columns):
+    x = [c['name'] for c in columns]
+    z = [[row.get(c['id'], None) for c in columns] for row in rows]
+
+    print(x)
+    print(z)
+
     return {
         'data': [{
             'type': 'heatmap',
@@ -79,6 +62,7 @@ def display_output(rows, columns):
             'x': [c['name'] for c in columns]
         }]
     }
+
 
 
 if __name__ == '__main__':
