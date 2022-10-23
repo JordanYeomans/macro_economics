@@ -215,7 +215,7 @@ if __name__ == '__main__':
     cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=0.5 / 100)
     cgui.create_plot()
 
-    sample_dates = [datetime.datetime.now() + datetime.timedelta(days=x) for x in range(100, 365 * 2)]
+    sample_dates = [datetime.datetime.now() + datetime.timedelta(days=x) for x in range(0, 365 * 3, 1)]
     sample_vals = cgui.sample_data(sample_dates)
 
     plt.plot(sample_dates, sample_vals, linestyle='-', c='black')
