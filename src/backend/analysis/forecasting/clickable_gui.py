@@ -1,29 +1,34 @@
-import datetime
 import scipy
+import datetime
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from matplotlib.widgets import Button
+from src.backend.analysis.balance_sheet_projection import BalanceSheetHistorical
 
 
 class ClickableGUI:
-    def __init__(self, start_val, default_end_val, start_date, end_date):
-        self.start_val = start_val
-        self.default_end_val = default_end_val
-        self.start_date = start_date
-        self.end_date = end_date
+    def __init__(self, df, default_end_val, end_date):
+        self.df = df.reset_index(drop=True)
+        assert len(self.df.columns) == 2
+        assert 'date' in self.df.columns
+        self.col = [x for x in self.df.columns if x != 'date'][0]
+
+        self.start_val = self.df.iloc[-1][self.col]
+        self.start_date = self.df.iloc[-1]['date']
+
+        # self.default_end_val = default_end_val
+        # self.end_date = end_date
 
         self._list_of_points = list()
-        self._spline = None
-
-        self.add_point(date=start_date, val=start_val)
-        self.add_point(date=end_date, val=default_end_val)
+        self.add_point(date=self.start_date, val=self.start_val)
+        # self.add_point(date=end_date, val=default_end_val)
 
     @property
     def list_of_points(self):
         xvals = np.array(self._list_of_points)[:, 0]
-        xvals = [x.timestamp() for x in xvals]
+        xvals = convert_dates_to_floats(xvals)
         sort_order = np.argsort(xvals, axis=0)
         list_of_points = np.array(self._list_of_points)[sort_order]
         return list(list_of_points)
@@ -34,20 +39,19 @@ class ClickableGUI:
     def _create_spline(self):
         return scipy.interpolate.InterpolatedUnivariateSpline(self.xvals, self.yvals)
 
+    def _reset_xvals(self):
+        xvals = np.array(self.list_of_points)[:, 0]
+        xvals = np.array([x.timestamp() for x in xvals])
+        xvals = np.array(xvals).astype(float)
+        return xvals
+
+    def _reset_yvals(self):
+        return np.array(np.array(self.list_of_points)[:, 1]).astype(float)
+
     def create_plot(self):
 
-        def get_xvals():
-            xvals = np.array(self.list_of_points)[:, 0]
-            xvals = np.array([x.timestamp() for x in xvals])
-            xvals = np.array(xvals).astype(float)
-            return xvals
-
-        def get_yvals():
-            return np.array(np.array(self.list_of_points)[:, 1]).astype(float)
-
-        self.xvals = get_xvals()
-        self.yvals = get_yvals()
-
+        self.xvals = self._reset_xvals()
+        self.yvals = self._reset_yvals()
         self.spline = self._create_spline()
 
         # set up a plot
@@ -60,8 +64,8 @@ class ClickableGUI:
         def reset(event):
 
             # reset the values
-            self.xvals = get_xvals()
-            self.yvals = get_yvals()
+            self.xvals = self._reset_xvals()
+            self.yvals = self._reset_yvals()
             self.spline = self._create_spline()
 
             l.set_xdata(self.xvals)
@@ -115,10 +119,22 @@ class ClickableGUI:
             if event.button != 1:
                 return
 
-            self.xvals[self.pind] = event.xdata
-            self.yvals[self.pind] = event.ydata
+            # You can't select the first point
+            if self.pind == 0:
+                return
 
-            l.set_xdata(self.xvals)
+            # Prevent the point from being dragged too far left
+            if event.xdata <= self.xvals[self.pind - 1]:
+                return
+
+            if self.pind != len(self.xvals) - 1 and event.xdata >= self.xvals[self.pind + 1]:
+                return
+
+            if self.pind != 0 and self.pind != len(self.xvals) - 1:
+                self.xvals[self.pind] = event.xdata
+                l.set_xdata(self.xvals)
+
+            self.yvals[self.pind] = event.ydata
             l.set_ydata(self.yvals)
 
             spline = self._create_spline()
@@ -132,9 +148,11 @@ class ClickableGUI:
         l, = ax1.plot(self.xvals, self.yvals, color='k', linestyle='none', marker='o', markersize=8)
         m, = ax1.plot(spline_x, self.spline(spline_x), 'r-', label='spline')
 
+        ax1.plot(convert_dates_to_floats(self.df['date']), self.df[self.col])
         ax1.set_ylim(0, max(self.spline(spline_x)) * 1.1)
         ax1.set_xlabel('x')
         ax1.set_ylabel('y')
+
         ax1.grid(True)
         ax1.yaxis.grid(True, which='minor', linestyle='--')
         ax1.legend(loc=2, prop={'size': 22})
@@ -150,12 +168,23 @@ class ClickableGUI:
         plt.show()
 
 
-if __name__ == '__main__':
-    cgui = ClickableGUI(start_val=2,
-                        default_end_val=4,
-                        start_date=datetime.datetime.now(),
-                        end_date=datetime.datetime.now() + datetime.timedelta(days=365))
+def convert_dates_to_floats(dates):
+    return np.array([x.timestamp() for x in dates])
 
-    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=30), val=2.5)
-    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=320), val=4)
+
+def convert_floats_to_dates(floats):
+    return np.array([datetime.datetime.fromtimestamp(x) for x in floats])
+
+
+if __name__ == '__main__':
+
+    bsh = BalanceSheetHistorical()
+
+    cgui = ClickableGUI(df=bsh.df[['date', 'avg_interest_rate_bills']],
+                        default_end_val=4.00 / 100,
+                        end_date=datetime.datetime.now() + datetime.timedelta(days=5 * 365))
+
+    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
+    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=4.00 / 100)
+    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=5.00 / 100)
     cgui.create_plot()
