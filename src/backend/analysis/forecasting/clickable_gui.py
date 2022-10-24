@@ -1,3 +1,4 @@
+import time
 import scipy
 import datetime
 
@@ -8,7 +9,176 @@ from matplotlib.widgets import Button
 from src.backend.analysis.balance_sheet_projection import BalanceSheetHistorical
 
 
-class ClickableGUI:
+class ClickableFig:
+
+    def __init__(self, list_of_calculators):
+
+        self.plot_dict = dict()
+        for i in range(len(list_of_calculators)):
+            self.plot_dict[i] = dict()
+            self.plot_dict[i]['calc'] = list_of_calculators[i]
+
+        self.exit_plot = False
+        epsilon = 25
+
+        self.fig, self.axes = plt.subplots(3, 1)
+
+        def get_ax_idx(event):
+
+            if event.xdata is None:
+                return
+
+            # Identify axis
+            ax_idx = None
+            for ax_idx, ax_name in enumerate(self.axes):
+                if str(ax_name) == str(event.inaxes):
+                    break
+            return ax_idx
+
+        # set up a plot
+
+        self._pind = None  # active point
+        epsilon = 25  # max pixel distance
+
+        # def reset(event):
+        #
+        #     for calc in self.calcs:
+        #         calc.reset()
+        #
+        #     l.set_xdata(self.xvals)
+        #     l.set_ydata(self.yvals)
+        #     m.set_ydata(self.spline(spline_x))
+        #     self.fig.canvas.draw_idle()
+
+        def button_press_callback(event):
+            """whenever a mouse button is pressed"""
+
+            if event.inaxes is None:
+                return
+            if event.button != 1:
+                return
+
+            self._pind = get_ind_under_point(event)
+
+        def button_release_callback(event):
+            """whenever a mouse button is released"""
+
+            if event.button != 1:
+                return
+            self._pind = None
+
+        def get_ind_under_point(event):
+            """get the index of the vertex under point if within epsilon tolerance"""
+            ax_idx = get_ax_idx(event)
+            ax = self.axes[ax_idx]
+            _calc = self.plot_dict[ax_idx]['calc']
+
+            tinv = ax.transData
+
+            xr = np.reshape(_calc.xvals, (np.shape(_calc.xvals)[0], 1))
+            yr = np.reshape(_calc.yvals, (np.shape(_calc.yvals)[0], 1))
+            xy_vals = np.append(xr, yr, 1)
+            xyt = tinv.transform(xy_vals)
+            xt, yt = xyt[:, 0], xyt[:, 1]
+            d = np.hypot(xt - event.x, yt - event.y)
+            indseq, = np.nonzero(d == d.min())
+            ind = indseq[0]
+
+            if d[ind] >= epsilon:
+                ind = None
+
+            return ind
+
+        def motion_notify_callback(event):
+            """ on mouse movement """
+            start_time = time.time()
+            ax_idx = get_ax_idx(event)
+            if ax_idx is None:
+                return
+
+            _calc = self.plot_dict[ax_idx]['calc']
+            l = self.plot_dict[ax_idx]['l']
+            m = self.plot_dict[ax_idx]['m']
+
+            if self._pind is None:
+                return
+            if event.inaxes is None:
+                return
+            if event.button != 1:
+                return
+
+            # You can't select the first point
+            if self._pind == 0:
+                return
+
+            # Prevent the point from being dragged too far left
+            if event.xdata <= _calc.xvals[self._pind - 1]:
+                return
+
+            if self._pind != len(_calc.xvals) - 1 and event.xdata >= _calc.xvals[self._pind + 1]:
+                return
+
+            if self._pind != 0 and self._pind != len(_calc.xvals) - 1:
+                _calc.xvals[self._pind] = event.xdata
+                l.set_xdata(_calc.xvals)
+
+            _calc.yvals[self._pind] = event.ydata
+            l.set_ydata(_calc.yvals)
+
+            _calc.spline = _calc.create_spline()
+            m.set_ydata(_calc.spline(spline_x))
+
+            self.fig.canvas.draw_idle()
+            print(1/(time.time() - start_time))
+
+        # create_plots
+        for i in range(len(list_of_calculators)):
+            ax1 = self.axes[i]
+            calc = self.plot_dict[i]['calc']
+
+            spline_intervals = 1000
+            spline_x = np.linspace(min(calc.xvals), max(calc.xvals), spline_intervals)
+
+            _l, = ax1.plot(calc.xvals, calc.yvals, color='k', linestyle='none', marker='o', markersize=8)
+            _m, = ax1.plot(spline_x, calc.spline(spline_x), 'r-', label=f'Future {calc.col}')
+
+            self.plot_dict[i]['l'] = _l
+            self.plot_dict[i]['m'] = _m
+
+            # Set the x-axis to be the dates
+            xaxis_min = min(convert_dates_to_floats(calc.df['date']))
+            xaxis_max = max(calc.xvals)
+            one_yr_ts = datetime.timedelta(days=365.25).total_seconds()  # account for leap years
+            xaxis_vals = np.arange(xaxis_min, xaxis_max, one_yr_ts)
+            xaxis_labels = [datetime.datetime.fromtimestamp(x).strftime('%d/%m/%Y') for x in xaxis_vals]
+            ax1.set_xticks(xaxis_vals, xaxis_labels, rotation=90)
+
+            max_val = np.max([max(calc.spline(spline_x)), max(calc.df[calc.col])])
+            min_val = np.min([min(calc.spline(spline_x)), min(calc.yvals), 0])
+
+            print(max_val, min_val)
+            ax1.set_ylim(min_val * 1.1, max_val * 1.1)
+            ax1.set_ylabel(calc.col)
+
+            # Plot the historical data
+            ax1.plot(convert_dates_to_floats(calc.df['date']), calc.df[calc.col])
+
+            ax1.grid(True)
+            ax1.yaxis.grid(True, which='minor', linestyle='--')
+            ax1.legend(loc=2, prop={'size': 12})
+
+        # axres = plt.axes([0.84, 0.9, 0.12, 0.02])  # left, bottom, width, height
+        # bres = Button(axres, 'Reset')
+        # bres.on_clicked(reset)
+
+        self.fig.canvas.mpl_connect('button_press_event', button_press_callback)
+        self.fig.canvas.mpl_connect('button_release_event', button_release_callback)
+        self.fig.canvas.mpl_connect('motion_notify_event', motion_notify_callback)
+
+        plt.show()
+
+
+class ClickableCalculator:
     def __init__(self, df):
         # Format DF
         self.df = df.reset_index(drop=True)
@@ -39,7 +209,7 @@ class ClickableGUI:
     def add_point(self, date, val):
         self._list_of_points.append([date, val])
 
-    def _create_spline(self):
+    def create_spline(self):
         return scipy.interpolate.InterpolatedUnivariateSpline(self.xvals, self.yvals)
 
     def _reset_xvals(self):
@@ -51,12 +221,18 @@ class ClickableGUI:
     def _reset_yvals(self):
         return np.array(np.array(self.list_of_points)[:, 1]).astype(float)
 
+    def reset(self):
+        # reset the values
+        self.xvals = self._reset_xvals()
+        self.yvals = self._reset_yvals()
+        self.spline = self.create_spline()
+
     def create_plot(self):
         assert len(self.list_of_points) >= 4, 'Must have at least 4 points to create plot, use add_point()'
 
         self.xvals = self._reset_xvals()
         self.yvals = self._reset_yvals()
-        self.spline = self._create_spline()
+        self.spline = self.create_spline()
 
         # set up a plot
         fig, ax1 = plt.subplots(1, 1, figsize=(12, 8.0))
@@ -68,9 +244,7 @@ class ClickableGUI:
         def reset(event):
 
             # reset the values
-            self.xvals = self._reset_xvals()
-            self.yvals = self._reset_yvals()
-            self.spline = self._create_spline()
+            self.reset()
 
             l.set_xdata(self.xvals)
             l.set_ydata(self.yvals)
@@ -141,7 +315,7 @@ class ClickableGUI:
             self.yvals[self._pind] = event.ydata
             l.set_ydata(self.yvals)
 
-            self.spline = self._create_spline()
+            self.spline = self.create_spline()
             m.set_ydata(self.spline(spline_x))
 
             fig.canvas.draw_idle()
@@ -155,7 +329,7 @@ class ClickableGUI:
         # Set the x-axis to be the dates
         xaxis_min = min(convert_dates_to_floats(self.df['date']))
         xaxis_max = max(self.xvals)
-        one_yr_ts = datetime.timedelta(days=365.25).total_seconds() # account for leap years
+        one_yr_ts = datetime.timedelta(days=365.25).total_seconds()  # account for leap years
         xaxis_vals = np.arange(xaxis_min, xaxis_max, one_yr_ts)
         xaxis_labels = [datetime.datetime.fromtimestamp(x).strftime('%d/%m/%Y') for x in xaxis_vals]
         ax1.set_xticks(xaxis_vals, xaxis_labels, rotation=90)
@@ -178,7 +352,7 @@ class ClickableGUI:
         fig.canvas.mpl_connect('button_release_event', button_release_callback)
         fig.canvas.mpl_connect('motion_notify_event', motion_notify_callback)
 
-        plt.show()
+        plt.close()
 
     def sample_data(self, list_of_dates):
         dates_as_floats = convert_dates_to_floats(list_of_dates)
@@ -203,20 +377,36 @@ def convert_floats_to_dates(floats):
 
 
 if __name__ == '__main__':
-
     bsh = BalanceSheetHistorical()
 
-    cgui = ClickableGUI(df=bsh.df[['date', 'avg_interest_rate_bills']])
+    cgui_1 = ClickableCalculator(df=bsh.df[['date', 'avg_interest_rate_bills']])
+    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
+    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=0.25 / 100)
+    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=0.25 / 100)
+    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=0.25 / 100)
+    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=0.5 / 100)
+    cgui_1.create_plot()
 
-    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
-    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=0.25 / 100)
-    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=0.25 / 100)
-    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=0.25 / 100)
-    cgui.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=0.5 / 100)
-    cgui.create_plot()
+    cgui_2 = ClickableCalculator(df=bsh.df[['date', 'avg_interest_rate_notes']])
+    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
+    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=3.5 / 100)
+    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=3.25 / 100)
+    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=2.25 / 100)
+    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=2.5 / 100)
+    cgui_2.create_plot()
 
-    sample_dates = [datetime.datetime.now() + datetime.timedelta(days=x) for x in range(0, 365 * 3, 1)]
-    sample_vals = cgui.sample_data(sample_dates)
+    cgui_3 = ClickableCalculator(df=bsh.df[['date', 'avg_interest_rate_bonds']])
+    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
+    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=3.5 / 100)
+    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=3.25 / 100)
+    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=2.25 / 100)
+    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=2.5 / 100)
+    cgui_3.create_plot()
 
-    plt.plot(sample_dates, sample_vals, linestyle='-', c='black')
-    plt.show()
+    multi_cgui = ClickableFig(list_of_calculators=[cgui_1, cgui_2, cgui_3])
+
+    # sample_dates = [datetime.datetime.now() + datetime.timedelta(days=x) for x in range(0, 365 * 3, 1)]
+    # sample_vals = cgui.sample_data(sample_dates)
+    #
+    # plt.plot(sample_dates, sample_vals, linestyle='-', c='black')
+    # plt.show()
