@@ -1,17 +1,16 @@
-import time
+import os
 import scipy
 import datetime
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-
-from matplotlib.widgets import Button
-from src.backend.analysis.balance_sheet_projection import BalanceSheetHistorical
+from matplotlib.widgets import Button, TextBox
 
 
 class ClickableFig:
 
-    def __init__(self, list_of_calculators):
+    def __init__(self, list_of_calculators, load_scenario=None):
 
         # Variables
         epsilon = 25  # Radius limit to select point
@@ -24,7 +23,12 @@ class ClickableFig:
         for i in range(len(list_of_calculators)):
             self.plot_dict[i] = dict()
             self.plot_dict[i]['calc'] = list_of_calculators[i]
-            self.plot_dict[i]['calc'].run()
+
+            # Load the scenario if a scenario name is provided
+            if load_scenario is not None:
+                self.plot_dict[i]['calc'].load_scenario(load_scenario)
+            else:
+                self.plot_dict[i]['calc'].run()
 
         # Internal Variables
         self._pind = None  # active point
@@ -49,6 +53,12 @@ class ClickableFig:
                 self.plot_dict[_i]['m'].set_ydata(_calc.spline(spline_x))
 
             self.fig.canvas.draw_idle()
+
+        def save_scenario(scenario_name):
+            """ Save the scenario if the save button is clicked """
+            for _i in range(len(list_of_calculators)):
+                self.plot_dict[_i]['calc'].save_scenario(scenario_name)
+            print(f'Saved {scenario_name}')
 
         def button_press_callback(event):
             """ When the mouse is clicked assign the _pind"""
@@ -101,6 +111,10 @@ class ClickableFig:
 
             # Prevent the first point from being moved, it should be fixed to the end of the previous series
             if self._pind == 0:
+                return
+
+            # If the mouse moves outside the plot during a drag, skip the update
+            if event.xdata is None:
                 return
 
             # Prevent the point from being dragged too far left
@@ -198,6 +212,11 @@ class ClickableFig:
         bres = Button(axres, 'Reset')
         bres.on_clicked(reset)
 
+        # Create Save Button
+        axres = plt.axes([0.74, 0.9, 0.12, 0.02])  # left, bottom, width, height
+        text_box = TextBox(axres, 'Evaluate', initial='Scenario 1')
+        text_box.on_submit(save_scenario)
+
         plt.show()
 
 
@@ -211,6 +230,9 @@ class ClickableCalculator:
 
         # Init internal variables
         self._list_of_points = list()
+        self.save_dir = '/data/tmp/cache/'
+        self.save_prefix = self.col
+
         self.xvals = None
         self.yvals = None
         self.spline = None
@@ -220,6 +242,9 @@ class ClickableCalculator:
         self.start_val = self.df.iloc[-1][self.col]
         self.start_date = self.df.iloc[-1]['date']
         self.add_point(date=self.start_date, val=self.start_val)
+
+    def set_save_prefix(self, prefix):
+        self.save_prefix = prefix
 
     @property
     def list_of_points(self):
@@ -243,6 +268,28 @@ class ClickableCalculator:
         self.xvals = self._reset_xvals()
         self.yvals = self._reset_yvals()
         self.spline = self.create_spline()
+
+    def save_scenario(self, scenario_name):
+        # save the points to csv
+        points_to_save = list()
+        for x, y in zip(self.xvals, self.yvals):
+            points_to_save.append([x, y])
+        df = pd.DataFrame(points_to_save, columns=['date', self.col])
+        df.to_csv(self._get_scenario_path(scenario_name), index=False)
+
+    def load_scenario(self, scenario_name):
+        # load the points from csv
+        df = pd.read_csv(self._get_scenario_path(scenario_name))
+        self._list_of_points = list()
+        for _, row in df.iterrows():
+            x = convert_floats_to_dates(row['date'])
+            y = row[self.col]
+            self._list_of_points.append([x, y])
+        self.run()
+
+    def _get_scenario_path(self, scenario_name):
+        assert self.save_prefix is not None, 'Set a save prefix before saving/loading'
+        return os.path.join(self.save_dir, f'{scenario_name}_{self.save_prefix}_.csv')
 
     def _reset_xvals(self):
         xvals = np.array(self.list_of_points)[:, 0]
@@ -276,33 +323,43 @@ def convert_floats_to_dates(floats):
 
 
 if __name__ == '__main__':
+
+    from src.backend.analysis.balance_sheet_projection import BalanceSheetHistorical
     bsh = BalanceSheetHistorical()
 
+    # 1. Example to show how to create a blank scenario
+
+    # cgui_1 = ClickableCalculator(df=bsh.df[['date', 'avg_interest_rate_bills']])
+    # cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
+    # cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=0.25 / 100)
+    # cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.0 * 365), val=0.25 / 100)
+    # cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=0.25 / 100)
+    # cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3.0 * 365), val=0.5 / 100)
+    #
+    # cgui_2 = ClickableCalculator(df=bsh.df[['date', 'avg_interest_rate_notes']])
+    # cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
+    # cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=3.5 / 100)
+    # cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=3.25 / 100)
+    # cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=2.25 / 100)
+    # cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=2.5 / 100)
+    #
+    # cgui_3 = ClickableCalculator(df=bsh.df[['date', 'avg_interest_rate_bonds']])
+    # cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
+    # cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=3.5 / 100)
+    # cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=3.25 / 100)
+    # cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=2.25 / 100)
+    # cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=2.5 / 100)
+
+    # multi_cgui = ClickableFig(list_of_calculators=[cgui_1, cgui_2, cgui_3], load_scenario=None)
+
+    # 2. Example to show how to load a scenario
     cgui_1 = ClickableCalculator(df=bsh.df[['date', 'avg_interest_rate_bills']])
-    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
-    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=0.25 / 100)
-    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=0.25 / 100)
-    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=0.25 / 100)
-    cgui_1.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=0.5 / 100)
-
     cgui_2 = ClickableCalculator(df=bsh.df[['date', 'avg_interest_rate_notes']])
-    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
-    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=3.5 / 100)
-    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=3.25 / 100)
-    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=2.25 / 100)
-    cgui_2.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=2.5 / 100)
-
     cgui_3 = ClickableCalculator(df=bsh.df[['date', 'avg_interest_rate_bonds']])
-    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1 * 365), val=3.00 / 100)
-    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=1.5 * 365), val=3.5 / 100)
-    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2 * 365), val=3.25 / 100)
-    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=2.5 * 365), val=2.25 / 100)
-    cgui_3.add_point(date=datetime.datetime.now() + datetime.timedelta(days=3 * 365), val=2.5 / 100)
+    multi_cgui = ClickableFig(list_of_calculators=[cgui_1, cgui_2, cgui_3], load_scenario='Scenario 1')
 
-    multi_cgui = ClickableFig(list_of_calculators=[cgui_1, cgui_2, cgui_3])
-
+    # 3. Example how to sample data from a ClickableGui
     sample_dates = [datetime.datetime.now() + datetime.timedelta(days=x) for x in range(0, 365 * 3, 1)]
-    sample_vals = cgui_1.sample_data(sample_dates)
-
+    sample_vals = cgui_2.sample_data(sample_dates)
     plt.plot(sample_dates, sample_vals, linestyle='-', c='black')
     plt.show()
