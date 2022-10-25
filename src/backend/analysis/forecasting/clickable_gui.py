@@ -131,6 +131,8 @@ class ClickableFig:
             _ax.draw_artist(_m)
             self.fig.canvas.blit(_ax.bbox)
 
+        xmin_list = list()
+        xmax_list = list()
         # Create Axes Backgrounds
         for i in range(len(list_of_calculators)):
             ax1 = self.axes[i]
@@ -143,7 +145,7 @@ class ClickableFig:
             # Note: This is where we would typical plot the lines. However, we plot them later to allow for the dynamic
             #       plotting of the lines. We need to store a raw background for each axis before adding the lines.
 
-            # Set the x-axis to be the dates
+            # Set the X axis. Dates are converted to floats to make spline calculation easier. Labels are date strings.
             xaxis_min = min(convert_dates_to_floats(calc.df['date']))
             xaxis_max = max(calc.xvals)
             one_yr_ts = datetime.timedelta(days=365.25).total_seconds()  # account for leap years
@@ -151,9 +153,14 @@ class ClickableFig:
             xaxis_labels = [datetime.datetime.fromtimestamp(x).strftime('%d/%m/%Y') for x in xaxis_vals]
             ax1.set_xticks(xaxis_vals, xaxis_labels, rotation=90)
 
+            # Keep a record of xmin and xmax to check that all axes are the same later. We save the date value to
+            # prevent rounding errors.
+            xmin_list.append(convert_floats_to_dates(xaxis_min).date())
+            xmax_list.append(convert_floats_to_dates(xaxis_max).date())
+
+            # Set the Y axis
             max_yval = np.max([max(calc.spline(spline_x)), max(calc.df[calc.col])])
             min_yval = np.min([min(calc.spline(spline_x)), min(calc.yvals), 0])
-
             ax1.set_xlim(xaxis_min, xaxis_max)
             ax1.set_ylim(min_yval * 1.1, max_yval * 1.1)
             ax1.set_ylabel(calc.col)
@@ -161,11 +168,16 @@ class ClickableFig:
             # Plot the historical data
             ax1.plot(convert_dates_to_floats(calc.df['date']), calc.df[calc.col])
 
+            # Add a grid
             ax1.grid(True)
             ax1.yaxis.grid(True, which='minor', linestyle='--')
 
         # Draw backgrounds
         self.fig.canvas.draw()
+
+        # Assert all end points are the same
+        assert len(set(xmin_list)) == 1, 'The start date must be the same for all axes'
+        assert len(set(xmax_list)) == 1, 'The last date must be the same for all axes'
 
         # Capture the raw background, and then plot the data
         for i in range(len(list_of_calculators)):
