@@ -138,7 +138,6 @@ class TreasuryAPI(DataAPIBase):
             if col == 'record_date':
                 assert raw_data['meta']['dataFormats'][col] == 'YYYY-MM-DD'
                 df['record_date'] = pd.to_datetime(df['record_date'], format='%Y-%m-%d')
-                df['record_date'] = df['record_date'].dt.date
 
             elif data_type == 'CURRENCY':
                 multiplier = 1
