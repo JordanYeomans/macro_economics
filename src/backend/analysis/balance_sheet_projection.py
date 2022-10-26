@@ -1,5 +1,6 @@
 import datetime
 
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from src.backend.analysis.debt_type_summary import DebtTypeSummary
@@ -23,34 +24,16 @@ class BalanceSheetHistorical:
         for i, debt_type in enumerate(self.debt_list):
             self.debt_list[i] = rename_debt_type(debt_type=debt_type)
 
-        self.add_total_debt()
-        self.add_interest()
+        self._calc_total_debt()
+        self._calc_interest()
 
-        # fig, axes = plt.subplots(1, 2)
-        #
-        # ax = axes[0]
-        # ax.plot(self.df[f'total_debt_bills'], label='bills')
-        # ax.plot(self.df[f'total_debt_notes'], label='notes')
-        # ax.plot(self.df[f'total_debt_bonds'], label='bonds')
-        # ax.plot(self.df['total_debt'], label='total')
-        # ax.legend()
-        #
-        # ax = axes[1]
-        # ax.plot(self.df[f'monthly_interest_bills'], label='bills')
-        # ax.plot(self.df[f'monthly_interest_notes'], label='notes')
-        # ax.plot(self.df[f'monthly_interest_bonds'], label='bonds')
-        # ax.plot(self.df['monthly_interest'], label='total')
-        # ax.legend()
-        #
-        # plt.show()
+    def _calc_total_debt(self):
+        self._add_columns(df_col_name='total_debt')
 
-    def add_total_debt(self):
-        self.add_columns(df_col_name='total_debt')
+    def _calc_interest(self):
+        self._add_columns(df_col_name='monthly_interest')
 
-    def add_interest(self):
-        self.add_columns(df_col_name='monthly_interest')
-
-    def add_columns(self, df_col_name):
+    def _add_columns(self, df_col_name):
         list_of_cols = list()
         for debt_type in self.debt_list:
             list_of_cols.append(f'{df_col_name}_{debt_type}')
@@ -91,39 +74,64 @@ class BalanceSheetFuture:
         self.new_issuance = NewIssuanceCalculator(debt_list=self.debt_list)
         self.fiscal_calc = FiscalCalculator()
 
-        self.df = self.bs_historical.df.iloc[-1]
+        self.df = self.bs_historical.df.tail(1).reset_index(drop=True)
+        self.add_date(date=datetime.datetime.today() + datetime.timedelta(days=365.25 / 2))
+        self.add_date(date=datetime.datetime.today() + datetime.timedelta(days=365.25))
 
-        self.add_date(date=datetime.datetime.today() + datetime.timedelta(days=100))
+        self.df.to_csv('test.csv')
 
     def add_date(self, date):
-        print(date)
-        new_row = self.df.keys()
-        print(new_row)
+        _row = dict()
 
-        new_row_dict = dict()
-        new_row_dict['date'] = date.date()
+        date = date.date()
+        _row['date'] = date
 
+        # Calculate Annual Deficit
+        tax_receipts = self.fiscal_calc.get_tax_receipts(date=date)
+        gov_spend_no_interest = self.fiscal_calc.get_gov_spending_no_interest(date=date)
+        annual_deficit_no_interest = (tax_receipts - gov_spend_no_interest) * -1  # -1 to invert
+        annual_deficit_w_interest = annual_deficit_no_interest + self.df.iloc[-1]['monthly_interest']
+
+        _row['tax_receipts'] = tax_receipts
+        _row['gov_spending_no_interest'] = gov_spend_no_interest
+        _row['annual_deficit_no_interest'] = annual_deficit_no_interest
+        _row['annual_deficit_w_interest'] = annual_deficit_w_interest
+
+        # Calculate New Issuance (based on number of days between rows)
+        days_between_rows = (date - self.df.iloc[-1]['date']).days
+        new_issuance = days_between_rows / 365.25 * annual_deficit_w_interest
+        _row['new_issuance'] = new_issuance
+
+        new_total_debt = 0
+        new_monthly_interest = 0
         for debt_type in self.debt_dict:
-            # Sample Interest Rates
-            interest_rate = self.debt_dict[debt_type]['AvgInterestCalculator'].get_interest_rate_for_date(date=date)
-            monthly_interest = self.calc_monthly_interest(avg_rate=interest_rate,
-                                                          debt_amt=self.df.iloc[-1][f'total_debt_{debt_type}'])
-
-            new_row_dict[f'avg_interest_rate_{debt_type}'] = interest_rate
-            new_row_dict[f'monthly_interest_{debt_type}'] = monthly_interest
-
-            # Sample New Issuance
             new_issuance_split = self.new_issuance.get_issuance_split(debt_type=debt_type)
-            new_row_dict[f'new_issuance_split_{debt_type}'] = new_issuance_split
+            new_issuance_amount = new_issuance * new_issuance_split
 
-        new_row_dict['tax_reciepts'] = self.fiscal_calc.get_tax_reciepts(date=date)
-        new_row_dict['gov_spending_no_interest'] = self.fiscal_calc.get_gov_spending_no_interest(date=date)
+            interest_rate = self.debt_dict[debt_type]['AvgInterestCalculator'].get_interest_rate_for_date(date=date)
+            total_debt = new_issuance_amount + self.df.iloc[-1][f'total_debt_{debt_type}']
+            monthly_interest = self.calc_monthly_interest(avg_rate=interest_rate,
+                                                          debt_amt=total_debt)
 
-        print(new_row_dict)
-        pass
+            new_total_debt += total_debt
+            new_monthly_interest += monthly_interest
 
-    def calc_monthly_interest(self, avg_rate, debt_amt):
-        return avg_rate * debt_amt
+            _row[f'new_issuance_split_{debt_type}'] = new_issuance_split
+            _row[f'new_issuance_amount_{debt_type}'] = new_issuance_amount
+            _row[f'total_debt_{debt_type}'] = total_debt
+            _row[f'avg_interest_rate_{debt_type}'] = interest_rate
+            _row[f'monthly_interest__{debt_type}'] = monthly_interest
+
+        _row['total_debt'] = new_total_debt
+        _row['monthly_interest'] = new_monthly_interest
+
+        _row = pd.DataFrame(_row, index=[1])
+
+        self.df = pd.concat([self.df, _row], axis=0, ignore_index=True)
+
+    @staticmethod
+    def calc_monthly_interest(avg_rate, debt_amt):
+        return avg_rate / 12 * debt_amt
 
 
 class BalanceSheetCombine:
@@ -158,9 +166,9 @@ class FiscalCalculator:
         pass
 
     def get_gov_spending_no_interest(self, date):
-        return -5.5e12
+        return 5.5e12
 
-    def get_tax_reciepts(self, date):
+    def get_tax_receipts(self, date):
         return 4.5e12
 
 
@@ -169,5 +177,5 @@ def rename_debt_type(debt_type):
 
 
 if __name__ == '__main__':
-    # balance_sheet_historical = BalanceSheetHistorical()
+    balance_sheet_historical = BalanceSheetHistorical().df.to_csv('balance_sheet_historical.csv')
     BalanceSheetCombine()
