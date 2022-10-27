@@ -1,6 +1,6 @@
 import datetime
 
-from src.backend.analysis.balance_sheet_projection import BalanceSheetHistorical
+from src.backend.analysis.balance_sheet.bs_historical import BalanceSheetHistorical
 from src.backend.analysis.forecasting.clickable_gui import ClickableCalculator, ClickableFig
 
 bsh = BalanceSheetHistorical()
@@ -39,8 +39,45 @@ class ForecastAvgInterestRateBonds(ClickableCalculator):
         self.run()
 
 
+class InterestRateForecaster:
+    def __init__(self, load_scenario=None):
+
+        self._bills = ForecastAvgInterestRateBills()
+        self._notes = ForecastAvgInterestRateNotes()
+        self._bonds = ForecastAvgInterestRateBonds()
+
+        list_of_calculators = [self._bills, self._notes, self._bonds]
+
+        ClickableFig(list_of_calculators=list_of_calculators,
+                     load_scenario=load_scenario)
+
+    @property
+    def forecast_dict(self):
+        return {'bills': self.bills,
+                'notes': self.notes,
+                'bonds': self.bonds}
+
+    @property
+    def bills(self):
+        return self._bills
+
+    @property
+    def notes(self):
+        return self._notes
+
+    @property
+    def bonds(self):
+        return self._bonds
+
+
 if __name__ == '__main__':
 
-    multi_cgui = ClickableFig(list_of_calculators=[ForecastAvgInterestRateBills(),
-                                                   ForecastAvgInterestRateNotes(),
-                                                   ForecastAvgInterestRateBonds()], load_scenario=None)
+    irf = InterestRateForecaster(load_scenario='Scenario 1')
+
+    # 3. Example how to sample data from a ClickableGui
+    sample_dates = [datetime.datetime.now() + datetime.timedelta(days=x) for x in range(0, 365 * 3, 1)]
+    sample_vals = irf.bills.sample(list_of_dates=sample_dates)
+
+    import matplotlib.pyplot as plt
+    plt.plot(sample_dates, sample_vals, linestyle='-', c='black')
+    plt.show()

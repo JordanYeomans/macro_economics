@@ -217,6 +217,10 @@ class ClickableFig:
         text_box = TextBox(axres, 'Evaluate', initial='Scenario 1')
         text_box.on_submit(save_scenario)
 
+        if load_scenario is None:
+            self.show()
+
+    def show(self):
         plt.show()
 
 
@@ -253,6 +257,10 @@ class ClickableCalculator:
         sort_order = np.argsort(xvals, axis=0)
         list_of_points = np.array(self._list_of_points)[sort_order]
         return list(list_of_points)
+
+    @property
+    def end_date(self):
+        return self.list_of_points[-1][0]
 
     def add_point(self, date, val):
         self._list_of_points.append([date, val])
@@ -300,7 +308,7 @@ class ClickableCalculator:
     def _reset_yvals(self):
         return np.array(np.array(self.list_of_points)[:, 1]).astype(float)
 
-    def sample_data(self, list_of_dates):
+    def sample(self, list_of_dates):
         dates_as_floats = convert_dates_to_floats(list_of_dates)
         assert max(dates_as_floats) <= max(self.xvals), f'Date is too far in the future, max date allowed ' \
                                                         f'= {convert_floats_to_dates(max(self.xvals)).date()}'
@@ -324,7 +332,7 @@ def convert_floats_to_dates(floats):
 
 if __name__ == '__main__':
 
-    from src.backend.analysis.balance_sheet_projection import BalanceSheetHistorical
+    from src.backend.analysis.balance_sheet.bs_historical import BalanceSheetHistorical
     bsh = BalanceSheetHistorical()
 
     # 1. Example to show how to create a blank scenario
@@ -360,6 +368,6 @@ if __name__ == '__main__':
 
     # 3. Example how to sample data from a ClickableGui
     sample_dates = [datetime.datetime.now() + datetime.timedelta(days=x) for x in range(0, 365 * 3, 1)]
-    sample_vals = cgui_2.sample_data(sample_dates)
+    sample_vals = cgui_2.sample(sample_dates)
     plt.plot(sample_dates, sample_vals, linestyle='-', c='black')
     plt.show()
